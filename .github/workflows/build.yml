@@ -84,7 +84,7 @@ jobs:
           # Emit a JSON array (empty array is valid; the build job will skip).
           MATRIX=$(echo "$LAYERS_TO_BUILD" \
             | tr ' ' '\n' | grep -v '^$' \
-            | jq -R -s 'split("\n") | map(select(length > 0))')
+            | jq -c -R -s 'split("\n") | map(select(length > 0))')
           echo "Layers to build: $MATRIX"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
