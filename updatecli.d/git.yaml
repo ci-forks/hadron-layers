@@ -12,7 +12,7 @@ scms:
       token: '{{ requiredEnv "UPDATECLI_GITHUB_TOKEN" }}'
       branch: main
       commitmessage:
-        title: "chore(git): bump git to {{ source "git" }}"
+        title: 'chore(git): bump git to {{ source "git" }}'
 
 sources:
   git:
@@ -27,7 +27,7 @@ sources:
 
 targets:
   git_version:
-    name: "GIT_VERSION in git/Dockerfile updated to {{ source "git" }}"
+    name: 'GIT_VERSION in git/Dockerfile updated to {{ source "git" }}'
     kind: dockerfile
     scmid: github
     spec:
@@ -41,7 +41,7 @@ pullrequests:
   git:
     kind: github
     scmid: github
-    title: "chore(git): automatic version bump to {{ source "git" }}"
+    title: 'chore(git): automatic version bump to {{ source "git" }}'
     spec:
       automerge: false
       labels:
