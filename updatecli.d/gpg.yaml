@@ -7,7 +7,8 @@ sources:
     spec:
       url: https://github.com/gpg/gnupg.git
       versionfilter:
-        kind: semver
+        kind: regex/semver
+        regex: '^gnupg-([0-9]+\.[0-9]+\.[0-9]+)$'
         pattern: "*"
     transformers:
       - trimprefix: gnupg-
@@ -17,7 +18,8 @@ sources:
     spec:
       url: https://github.com/gpg/libgpg-error.git
       versionfilter:
-        kind: semver
+        kind: regex/semver
+        regex: '^libgpg-error-([0-9]+\.[0-9]+(?:\.[0-9]+)?)$'
         pattern: "*"
     transformers:
       - trimprefix: libgpg-error-
@@ -38,7 +40,8 @@ sources:
     spec:
       url: https://github.com/gpg/libassuan.git
       versionfilter:
-        kind: semver
+        kind: regex/semver
+        regex: '^libassuan-([0-9]+\.[0-9]+\.[0-9]+)$'
         pattern: "*"
     transformers:
       - trimprefix: libassuan-
@@ -48,7 +51,8 @@ sources:
     spec:
       url: https://github.com/gpg/libksba.git
       versionfilter:
-        kind: semver
+        kind: regex/semver
+        regex: '^libksba-([0-9]+\.[0-9]+\.[0-9]+)$'
         pattern: "*"
     transformers:
       - trimprefix: libksba-
@@ -58,7 +62,8 @@ sources:
     spec:
       url: https://github.com/gpg/npth.git
       versionfilter:
-        kind: semver
+        kind: regex/semver
+        regex: '^npth-([0-9]+\.[0-9]+(?:\.[0-9]+)?)$'
         pattern: "*"
     transformers:
       - trimprefix: npth-
