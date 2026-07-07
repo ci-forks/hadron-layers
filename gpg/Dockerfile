@@ -1,5 +1,6 @@
 # HADRON_TOOLCHAIN_VERSION is provided centrally via docker-bake.hcl.
 ARG HADRON_TOOLCHAIN_VERSION
+ARG HADRON_VERSION
 
 FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_TOOLCHAIN_VERSION} AS downloader
 RUN mkdir -p /output
@@ -140,3 +141,23 @@ RUN find /output -name "*.h"  -delete && \
 # Or create a sysextension with the help of Auroraboot (https://github.com/kairos-io/auroraboot)
 FROM scratch AS default
 COPY --from=merge /output/ /
+
+# Smoke-test the built layer against a Hadron base image. Any RUN failure
+# here fails the build and gates the release step in CI. Runs an offline
+# sign/verify roundtrip with an ephemeral keypair to exercise libgcrypt,
+# libgpg-error, libassuan and libksba in one shot.
+# HADRON_VERSION is pinned centrally in docker-bake.hcl and bumped by
+# Renovate when a newer semver tag is published to GHCR.
+FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS test
+COPY --from=default / /
+RUN gpg --version
+RUN gpgv --version
+RUN set -eux; \
+    export GNUPGHOME=$(mktemp -d); \
+    gpg --batch --pinentry-mode loopback --passphrase '' \
+        --quick-gen-key 'Hadron Test <test@hadron.local>' rsa2048 default 1y; \
+    gpg --list-keys | grep -q test@hadron.local; \
+    echo "hadron layer smoke test" > /tmp/msg; \
+    gpg --batch --pinentry-mode loopback --passphrase '' --sign /tmp/msg; \
+    gpg --verify /tmp/msg.gpg; \
+    rm -rf "$GNUPGHOME" /tmp/msg /tmp/msg.gpg

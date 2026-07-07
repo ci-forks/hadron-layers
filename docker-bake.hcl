@@ -9,6 +9,17 @@ variable "HADRON_TOOLCHAIN_VERSION" {
   default = "v0.4.0"
 }
 
+# HADRON_VERSION is the tag of the Hadron base image used by every layer's
+# test stage. Renovate tracks this variable via the custom manager in
+# renovate.json and opens PRs when a newer semver tag is published to GHCR.
+# Currently pinned to the "main" rolling tag because the fix that turns
+# /usr/sbin into a real directory has not yet landed on any versioned tag.
+# Swap to the next hadron semver release (e.g. v0.5.0) as soon as it is
+# published; Renovate keeps it fresh from that point on.
+variable "HADRON_VERSION" {
+  default = "main"
+}
+
 variable "REGISTRY" {
   default = "ghcr.io/kairos-io"
 }
@@ -45,6 +56,7 @@ target "git" {
   target     = "default"
   args = {
     HADRON_TOOLCHAIN_VERSION = HADRON_TOOLCHAIN_VERSION
+    HADRON_VERSION           = HADRON_VERSION
   }
   labels    = common_labels("hadron-layer-git", "Git version control system")
   platforms = ["linux/amd64", "linux/arm64"]
@@ -57,6 +69,7 @@ target "gpg" {
   target     = "default"
   args = {
     HADRON_TOOLCHAIN_VERSION = HADRON_TOOLCHAIN_VERSION
+    HADRON_VERSION           = HADRON_VERSION
   }
   labels    = common_labels("hadron-layer-gpg", "GnuPG and its runtime libraries")
   platforms = ["linux/amd64", "linux/arm64"]
@@ -69,6 +82,7 @@ target "fwupd" {
   target     = "default"
   args = {
     HADRON_TOOLCHAIN_VERSION = HADRON_TOOLCHAIN_VERSION
+    HADRON_VERSION           = HADRON_VERSION
   }
   labels    = common_labels("hadron-layer-fwupd", "Firmware update daemon")
   platforms = ["linux/amd64", "linux/arm64"]

@@ -1,5 +1,6 @@
 # HADRON_TOOLCHAIN_VERSION is provided centrally via docker-bake.hcl.
 ARG HADRON_TOOLCHAIN_VERSION
+ARG HADRON_VERSION
 
 FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_TOOLCHAIN_VERSION} AS downloader
 # Install it at the top so we dont need to reinstall on each target
@@ -12,9 +13,14 @@ WORKDIR /sources
 ARG FWUPD_VERSION=2.1.6
 RUN curl -L https://github.com/fwupd/fwupd/releases/download/${FWUPD_VERSION}/fwupd-${FWUPD_VERSION}.tar.xz -o fwupd.tar.xz
 
-# glib
-ARG GLIB_VERSION=2.89.1
-RUN curl -L https://download.gnome.org/sources/glib/2.86/glib-${GLIB_VERSION}.tar.xz -o glib.tar.xz
+# glib. GNOME sources are grouped by major.minor series under
+# /sources/glib/<major>.<minor>/, and only even minor versions are stable
+# (2.86.x, 2.88.x, ...); odd minor versions are dev releases. Pin to the
+# latest stable series and derive the directory segment from the version
+# so future bumps do not have to touch the URL.
+ARG GLIB_VERSION=2.88.2
+RUN GLIB_SERIES="${GLIB_VERSION%.*}" && \
+    curl -L "https://download.gnome.org/sources/glib/${GLIB_SERIES}/glib-${GLIB_VERSION}.tar.xz" -o glib.tar.xz
 
 ARG PCRE2_VERSION=10.47
 RUN curl -L https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VERSION}/pcre2-${PCRE2_VERSION}.tar.gz -o pcre2.tar.gz
@@ -145,11 +151,15 @@ COPY --from=gettext /output/ /
 COPY --from=sqlite3 /output/ /
 COPY --from=libjcat /output/ /
 WORKDIR /sources/fwupd
-# localstatedir is where it will store things like metadata
+# localstatedir is where it will store things like metadata. Options track
+# fwupd >= 2.1: cbor, libarchive, plugin_flashrom and protobuf were removed
+# upstream; logind and udev_hotplug were added and are disabled here since
+# Hadron layers ship no systemd-logind and no persistent udev daemon.
 RUN meson setup buildDir ${COMMON_MESON_FLAGS} --localstatedir=/usr/local -Dintrospection=disabled -Dbash_completion=false \
-    -Dblkid=disabled -Dbluez=disabled -Dcbor=disabled -Ddocs=disabled -Dfish_completion=false -Dgnutls=disabled \
-    -Dfirmware-packager=false -Dhsi=disabled -Dlibarchive=disabled -Dlibdrm=disabled -Dlibmnl=disabled -Dman=false \
-    -Dp2p_policy=none -Dpassim=disabled -Dpolkit=disabled -Dprotobuf=disabled -Dqubes=false -Dsupported_build=disabled -Dplugin_flashrom=disabled \
+    -Dblkid=disabled -Dbluez=disabled -Ddocs=disabled -Dfish_completion=false -Dgnutls=disabled \
+    -Dfirmware-packager=false -Dhsi=disabled -Dlibdrm=disabled -Dlibmnl=disabled -Dman=false \
+    -Dlogind=disabled -Dudev_hotplug=false \
+    -Dp2p_policy=none -Dpassim=disabled -Dpolkit=disabled -Dqubes=false -Dsupported_build=disabled \
     -Dtests=false -Dumockdev_tests=disabled -Dvalgrind=disabled -Db_lto=true -Dvendor_ids_dir=/usr/share/hwdata/ -Dplugin_uefi_capsule_splash=false
 RUN DESTDIR=/output ninja -C buildDir install
 
@@ -193,3 +203,20 @@ COPY --from=merge /output/usr/share/dbus-1/ /usr/share/dbus-1/
 COPY --from=merge /output/usr/share/fwupd/ /usr/share/fwupd/
 COPY --from=merge /output/usr/share/icons/ /usr/share/icons/
 COPY --from=merge /output/usr/share/metainfo/ /usr/share/metainfo/
+
+# Smoke-test the built layer against a Hadron base image. Any RUN failure
+# here fails the build and gates the release step in CI. fwupd depends on
+# a long transitive stack (glib, libxmlb, libjcat, sqlite, libusb, libffi,
+# gettext) — a version check catches broken linkage, missing symbols and
+# runtime loader misconfiguration in the assembled layer.
+# HADRON_VERSION is pinned centrally in docker-bake.hcl and bumped by
+# Renovate when a newer semver tag is published to GHCR.
+FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS test
+COPY --from=default / /
+# fwupdtool is the standalone tool — links the same libfwupd /
+# libfwupdplugin stack as the daemon but does not need a running fwupd
+# on DBus, so it exercises the full transitive dep chain (glib, libxmlb,
+# libjcat, sqlite, libusb, libffi, gettext) at runtime. get-plugins
+# additionally forces the plugin loader to initialize.
+RUN fwupdtool --version
+RUN fwupdtool get-plugins --json > /dev/null

@@ -2,6 +2,7 @@
 # HADRON_TOOLCHAIN_VERSION is provided centrally via docker-bake.hcl.
 
 ARG HADRON_TOOLCHAIN_VERSION
+ARG HADRON_VERSION
 
 FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_TOOLCHAIN_VERSION} AS builder
 
@@ -16,7 +17,11 @@ WORKDIR /build/git-src
 # and the build is treated as native. See #238.
 RUN ./configure ${COMMON_CONFIGURE_ARGS} --build=${TARGET} \
     --without-tcltk --without-gettext
-RUN make install prefix=/usr DESTDIR=/output NO_TCLTK=YesPlease NO_GETTEXT=YesPlease
+# NO_RUST disables the experimental libgitcore.a Rust build introduced in
+# git 2.55. It requires cargo which the hadron-toolchain image does not
+# ship. Rust is optional through the git 2.x series and mandatory from
+# git 3.0; drop NO_RUST once the toolchain provides cargo.
+RUN make install prefix=/usr DESTDIR=/output NO_TCLTK=YesPlease NO_GETTEXT=YesPlease NO_RUST=YesPlease
 
 # Strip dev artifacts from the install tree so the final layer only ships
 # runtime binaries, libexec helpers, shared libraries, and data files.
@@ -39,3 +44,28 @@ RUN find /output -name "*.h"  -delete && \
 # Or create a sysextension with the help of Auroraboot (https://github.com/kairos-io/auroraboot)
 FROM scratch AS default
 COPY --from=merge /output/ /
+
+# Smoke-test the built layer against a Hadron base image. Any RUN failure
+# here fails the build and gates the release step in CI. Kept fully offline
+# so the test is deterministic and does not depend on external network.
+# HADRON_VERSION is pinned centrally in docker-bake.hcl and bumped by
+# Renovate when a newer semver tag is published to GHCR.
+FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS test
+COPY --from=default / /
+RUN git --version
+RUN set -eux; \
+    export HOME=/tmp; \
+    git config --global user.email test@hadron.local; \
+    git config --global user.name test; \
+    mkdir -p /tmp/repo && cd /tmp/repo; \
+    git init -q -b main; \
+    echo hello > file.txt; \
+    git add file.txt; \
+    git commit -q -m initial; \
+    git log --oneline | grep -q initial; \
+    git checkout -q -b feature; \
+    echo world >> file.txt; \
+    git commit -q -am update; \
+    git checkout -q main; \
+    git merge -q --no-ff feature -m merge; \
+    [ "$(git log --oneline | wc -l)" = 3 ]
