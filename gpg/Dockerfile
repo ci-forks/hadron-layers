@@ -145,7 +145,7 @@ COPY --from=merge /output/ /
 # here fails the build and gates the release step in CI. Runs an offline
 # sign/verify roundtrip with an ephemeral keypair to exercise libgcrypt,
 # libgpg-error, libassuan and libksba in one shot.
-FROM ghcr.io/kairos-io/hadron:latest AS test
+FROM ghcr.io/kairos-io/hadron:main AS test
 COPY --from=default / /
 RUN gpg --version
 RUN gpgv --version

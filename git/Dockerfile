@@ -47,7 +47,7 @@ COPY --from=merge /output/ /
 # Smoke-test the built layer against a Hadron base image. Any RUN failure
 # here fails the build and gates the release step in CI. Kept fully offline
 # so the test is deterministic and does not depend on external network.
-FROM ghcr.io/kairos-io/hadron:latest AS test
+FROM ghcr.io/kairos-io/hadron:main AS test
 COPY --from=default / /
 RUN git --version
 RUN set -eux; \

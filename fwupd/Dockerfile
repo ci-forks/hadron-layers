@@ -208,7 +208,7 @@ COPY --from=merge /output/usr/share/metainfo/ /usr/share/metainfo/
 # a long transitive stack (glib, libxmlb, libjcat, sqlite, libusb, libffi,
 # gettext) — a version check catches broken linkage, missing symbols and
 # runtime loader misconfiguration in the assembled layer.
-FROM ghcr.io/kairos-io/hadron:latest AS test
+FROM ghcr.io/kairos-io/hadron:main AS test
 COPY --from=default / /
 # fwupdtool is the standalone tool — links the same libfwupd /
 # libfwupdplugin stack as the daemon but does not need a running fwupd
