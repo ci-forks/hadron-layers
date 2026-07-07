@@ -15,6 +15,14 @@ sources:
     spec:
       owner: GNOME
       repository: glib
+      # GNOME versioning: even minor = stable (2.86.x, 2.88.x, ...);
+      # odd minor = development (2.87.x, 2.89.x). Only track stable
+      # releases — dev tarballs live under a different URL directory
+      # and often break the fwupd/glib API contract.
+      versionfilter:
+        kind: regex/semver
+        regex: '^([0-9]+\.[0-9]*[02468]\.[0-9]+)$'
+        pattern: "*"
     transformers:
       - trimprefix: v
 
@@ -55,6 +63,11 @@ sources:
     spec:
       owner: GNOME
       repository: json-glib
+      # Same GNOME even-minor-only stable policy as glib above.
+      versionfilter:
+        kind: regex/semver
+        regex: '^([0-9]+\.[0-9]*[02468]\.[0-9]+)$'
+        pattern: "*"
     transformers:
       - trimprefix: v
 

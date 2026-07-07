@@ -12,9 +12,14 @@ WORKDIR /sources
 ARG FWUPD_VERSION=2.1.6
 RUN curl -L https://github.com/fwupd/fwupd/releases/download/${FWUPD_VERSION}/fwupd-${FWUPD_VERSION}.tar.xz -o fwupd.tar.xz
 
-# glib
-ARG GLIB_VERSION=2.89.1
-RUN curl -L https://download.gnome.org/sources/glib/2.86/glib-${GLIB_VERSION}.tar.xz -o glib.tar.xz
+# glib. GNOME sources are grouped by major.minor series under
+# /sources/glib/<major>.<minor>/, and only even minor versions are stable
+# (2.86.x, 2.88.x, ...); odd minor versions are dev releases. Pin to the
+# latest stable series and derive the directory segment from the version
+# so future bumps do not have to touch the URL.
+ARG GLIB_VERSION=2.88.2
+RUN GLIB_SERIES="${GLIB_VERSION%.*}" && \
+    curl -L "https://download.gnome.org/sources/glib/${GLIB_SERIES}/glib-${GLIB_VERSION}.tar.xz" -o glib.tar.xz
 
 ARG PCRE2_VERSION=10.47
 RUN curl -L https://github.com/PCRE2Project/pcre2/releases/download/pcre2-${PCRE2_VERSION}/pcre2-${PCRE2_VERSION}.tar.gz -o pcre2.tar.gz
@@ -145,11 +150,15 @@ COPY --from=gettext /output/ /
 COPY --from=sqlite3 /output/ /
 COPY --from=libjcat /output/ /
 WORKDIR /sources/fwupd
-# localstatedir is where it will store things like metadata
+# localstatedir is where it will store things like metadata. Options track
+# fwupd >= 2.1: cbor, libarchive, plugin_flashrom and protobuf were removed
+# upstream; logind and udev_hotplug were added and are disabled here since
+# Hadron layers ship no systemd-logind and no persistent udev daemon.
 RUN meson setup buildDir ${COMMON_MESON_FLAGS} --localstatedir=/usr/local -Dintrospection=disabled -Dbash_completion=false \
-    -Dblkid=disabled -Dbluez=disabled -Dcbor=disabled -Ddocs=disabled -Dfish_completion=false -Dgnutls=disabled \
-    -Dfirmware-packager=false -Dhsi=disabled -Dlibarchive=disabled -Dlibdrm=disabled -Dlibmnl=disabled -Dman=false \
-    -Dp2p_policy=none -Dpassim=disabled -Dpolkit=disabled -Dprotobuf=disabled -Dqubes=false -Dsupported_build=disabled -Dplugin_flashrom=disabled \
+    -Dblkid=disabled -Dbluez=disabled -Ddocs=disabled -Dfish_completion=false -Dgnutls=disabled \
+    -Dfirmware-packager=false -Dhsi=disabled -Dlibdrm=disabled -Dlibmnl=disabled -Dman=false \
+    -Dlogind=disabled -Dudev_hotplug=false \
+    -Dp2p_policy=none -Dpassim=disabled -Dpolkit=disabled -Dqubes=false -Dsupported_build=disabled \
     -Dtests=false -Dumockdev_tests=disabled -Dvalgrind=disabled -Db_lto=true -Dvendor_ids_dir=/usr/share/hwdata/ -Dplugin_uefi_capsule_splash=false
 RUN DESTDIR=/output ninja -C buildDir install
 
