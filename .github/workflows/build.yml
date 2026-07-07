@@ -95,8 +95,14 @@ jobs:
       # A non-zero exit fails this job and prevents the release build below
       # from running. Kept amd64-only: arm64 test would need QEMU emulation
       # which is slow and rarely surfaces bugs the amd64 test does not.
-      # Cache is shared with the release build so this step warms the amd64
-      # portion of the layer stack for free.
+      #
+      # This step writes to its own cache scope (<layer>-test) instead of the
+      # release scope. GHA cache keys are immutable, so if both steps wrote to
+      # the same scope the smoke test (amd64-only) would create the manifest
+      # first and the release step's write (which also carries arm64) would be
+      # rejected as a conflict — leaving arm64 uncached and recompiled under
+      # QEMU on every run. The release step below reads this scope so the amd64
+      # work done here is still reused for free.
       - name: Smoke test ${{ matrix.layer }} layer
         uses: docker/bake-action@v7
         with:
@@ -106,9 +112,13 @@ jobs:
             *.target=test
             *.output=type=cacheonly
             *.platform=linux/amd64
-            *.cache-from=type=gha,scope=${{ matrix.layer }}
-            *.cache-to=type=gha,scope=${{ matrix.layer }},mode=max
+            *.cache-from=type=gha,scope=${{ matrix.layer }}-test
+            *.cache-to=type=gha,scope=${{ matrix.layer }}-test,mode=max
 
+      # Sole writer of the release scope (<layer>), so its cache-to never hits
+      # an immutable-key conflict and both amd64 and arm64 layers persist
+      # between runs. Reads the smoke test scope too, to reuse the amd64 layers
+      # warmed above without recompiling them.
       - name: Build and push ${{ matrix.layer }} layer
         uses: docker/bake-action@v7
         with:
@@ -116,6 +126,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           set: |
             *.cache-from=type=gha,scope=${{ matrix.layer }}
+            *.cache-from=type=gha,scope=${{ matrix.layer }}-test
             *.cache-to=type=gha,scope=${{ matrix.layer }},mode=max
         env:
           TAG: ${{ steps.version.outputs.value }}
