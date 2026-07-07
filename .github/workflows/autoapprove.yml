@@ -39,12 +39,15 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # Enable auto-merge using PAT_TOKEN rather than the default GITHUB_TOKEN.
-      # A merge performed with GITHUB_TOKEN does not trigger further workflow
-      # runs (GitHub's guard against recursive runs), so the resulting push to
-      # main would never start the "Build and push layer images" workflow.
-      # Using a PAT makes the merge push a normal event that triggers build.yml.
+      # Enable auto-merge using GITHUB_TOKEN. The --auto flag only queues the
+      # merge on GitHub's side; the actual squash-merge is performed by
+      # GitHub's backend once all required checks pass. That backend push is
+      # a normal push event and does trigger the "Build and push layer images"
+      # workflow, unlike a direct merge via the API with GITHUB_TOKEN.
+      # PAT_TOKEN (ci-robbot) cannot be used here because ci-robbot is only a
+      # collaborator on the fork and lacks MergePullRequest permission on the
+      # target repository.
       - name: Enable auto-merge
         run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
         env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
