@@ -49,10 +49,111 @@ jobs:
           echo "Layers: $MATRIX"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
+  # Build each layer once per architecture on a NATIVE runner (no QEMU) so the
+  # arm64 compile is as fast as amd64. Each (layer, arch) job pushes its image
+  # by digest only — no per-arch tag — and the merge job below stitches the two
+  # digests into a single multi-arch tag. Because the per-arch images are
+  # untagged, nothing intermediate lingers in the registry.
+  #
+  # Cache is scoped per (layer, arch): amd64 and arm64 now run on separate
+  # runners with separate BuildKit instances, so a shared scope would just race.
+  # Within a job the smoke test and build share one BuildKit instance and one
+  # scope, with the build step as the sole cache-to writer.
   build:
-    name: Build ${{ matrix.layer }} layer
-    runs-on: oracle-vm-32cpu-128gb-x86-64
+    name: Build ${{ matrix.layer }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
     needs: discover
+    strategy:
+      fail-fast: false
+      matrix:
+        layer: ${{ fromJson(needs.discover.outputs.matrix) }}
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: oracle-vm-32cpu-128gb-x86-64
+          - arch: arm64
+            runner: oracle-vm-32cpu-128gb-arm64
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build the Dockerfile's `test` stage and let any RUN in it execute. A
+      # non-zero exit fails this job and prevents the build below from running.
+      # Now runs natively on this arch, so arm64 gets real test coverage cheaply.
+      # Reads the (layer, arch) cache only; the build step is the sole cache-to
+      # writer, and the two steps share this job's local BuildKit cache so the
+      # stages compiled here are reused by the build step for free.
+      - name: Smoke test ${{ matrix.layer }} (${{ matrix.arch }})
+        uses: docker/bake-action@v7
+        with:
+          targets: ${{ matrix.layer }}
+          push: false
+          set: |
+            *.target=test
+            *.output=type=cacheonly
+            *.platform=linux/${{ matrix.arch }}
+            *.cache-from=type=gha,scope=${{ matrix.layer }}-${{ matrix.arch }}
+
+      # Build the release image for this single arch. On push/tag it is pushed
+      # by digest (untagged) so the merge job can assemble a multi-arch tag; on
+      # pull_request it is only built (type=cacheonly) to validate without
+      # pushing. Sole cache-to writer of the (layer, arch) scope.
+      - name: Build ${{ matrix.layer }} (${{ matrix.arch }})
+        id: build
+        uses: docker/bake-action@v7
+        with:
+          targets: ${{ matrix.layer }}
+          push: false
+          set: |
+            *.platform=linux/${{ matrix.arch }}
+            *.output=${{ github.event_name != 'pull_request' && 'type=image,push-by-digest=true,name-canonical=true,push=true' || 'type=cacheonly' }}
+            *.cache-from=type=gha,scope=${{ matrix.layer }}-${{ matrix.arch }}
+            *.cache-to=type=gha,scope=${{ matrix.layer }}-${{ matrix.arch }},mode=max
+
+      # Persist the pushed image digest so the merge job can reference it.
+      - name: Export digest
+        if: github.event_name != 'pull_request'
+        env:
+          LAYER: ${{ matrix.layer }}
+          METADATA: ${{ steps.build.outputs.metadata }}
+        run: |
+          mkdir -p /tmp/digests
+          printf '%s' "$METADATA" > /tmp/metadata.json
+          digest=$(jq -r --arg t "$LAYER" '.[$t]."containerimage.digest"' /tmp/metadata.json)
+          if [ -z "$digest" ] || [ "$digest" = "null" ]; then
+            echo "Error: no containerimage.digest for target $LAYER in bake metadata" >&2
+            cat /tmp/metadata.json >&2
+            exit 1
+          fi
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ matrix.layer }}-${{ matrix.arch }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Combine the per-arch digests for each layer into a single multi-arch image
+  # tag. Skipped on pull_request (nothing was pushed there).
+  merge:
+    name: Merge ${{ matrix.layer }} manifest
+    runs-on: ubuntu-latest
+    needs: [discover, build]
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -66,67 +167,50 @@ jobs:
       # not HADRON_TOOLCHAIN_VERSION is the image's version tag.
       - name: Extract software version
         id: version
+        env:
+          LAYER: ${{ matrix.layer }}
         run: |
-          VERSION=$(grep -E '^ARG [A-Z][A-Z_0-9]*_VERSION=' ${{ matrix.layer }}/Dockerfile \
+          VERSION=$(grep -E '^ARG [A-Z][A-Z_0-9]*_VERSION=' "$LAYER/Dockerfile" \
             | grep -v '^ARG HADRON_TOOLCHAIN_VERSION=' \
             | head -1 \
             | cut -d= -f2)
           if [[ -z "$VERSION" ]]; then
-            echo "Error: no _VERSION ARG with a default value found in ${{ matrix.layer }}/Dockerfile (or only HADRON_TOOLCHAIN_VERSION was present)"
+            echo "Error: no _VERSION ARG with a default value found in $LAYER/Dockerfile (or only HADRON_TOOLCHAIN_VERSION was present)"
             exit 1
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v4
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-${{ matrix.layer }}-*
+          merge-multiple: true
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # Build the Dockerfile's `test` stage and let any RUN in it execute.
-      # A non-zero exit fails this job and prevents the release build below
-      # from running. Kept amd64-only: arm64 test would need QEMU emulation
-      # which is slow and rarely surfaces bugs the amd64 test does not.
-      #
-      # This step only READS the layer's cache (no cache-to). It shares the
-      # buildx instance with the build-and-push step below, so the amd64 stages
-      # it compiles stay in the local BuildKit cache and are reused there for
-      # free — no duplicate work and no second cache scope. Crucially, letting
-      # the release step be the *only* cache-to writer avoids the GHA
-      # immutable-key conflict that previously dropped the arm64 layers (two
-      # writers to one scope: the amd64-only smoke test claimed the key first,
-      # so the release step's arm64 write was rejected and recompiled under
-      # QEMU on every run).
-      - name: Smoke test ${{ matrix.layer }} layer
-        uses: docker/bake-action@v7
-        with:
-          targets: ${{ matrix.layer }}
-          push: false
-          set: |
-            *.target=test
-            *.output=type=cacheonly
-            *.platform=linux/amd64
-            *.cache-from=type=gha,scope=${{ matrix.layer }}
-
-      # Sole writer of the layer cache scope, so cache-to never hits an
-      # immutable-key conflict and both amd64 and arm64 layers persist between
-      # runs. The amd64 stages compiled by the smoke test above are reused from
-      # the shared local BuildKit cache, so only the arm64 stages are built here.
-      - name: Build and push ${{ matrix.layer }} layer
-        uses: docker/bake-action@v7
-        with:
-          targets: ${{ matrix.layer }}
-          push: ${{ github.event_name != 'pull_request' }}
-          set: |
-            *.cache-from=type=gha,scope=${{ matrix.layer }}
-            *.cache-to=type=gha,scope=${{ matrix.layer }},mode=max
+      - name: Create multi-arch manifest
+        working-directory: /tmp/digests
         env:
-          TAG: ${{ steps.version.outputs.value }}
+          LAYER: ${{ matrix.layer }}
+          VERSION: ${{ steps.version.outputs.value }}
+          REGISTRY: ghcr.io/kairos-io
+        run: |
+          docker buildx imagetools create \
+            -t "$REGISTRY/hadron-layer-$LAYER:$VERSION" \
+            $(printf "$REGISTRY/hadron-layer-$LAYER@sha256:%s " *)
+
+      - name: Inspect image
+        env:
+          LAYER: ${{ matrix.layer }}
+          VERSION: ${{ steps.version.outputs.value }}
+          REGISTRY: ghcr.io/kairos-io
+        run: docker buildx imagetools inspect "$REGISTRY/hadron-layer-$LAYER:$VERSION"
