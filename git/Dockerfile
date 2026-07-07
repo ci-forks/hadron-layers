@@ -16,7 +16,11 @@ WORKDIR /build/git-src
 # and the build is treated as native. See #238.
 RUN ./configure ${COMMON_CONFIGURE_ARGS} --build=${TARGET} \
     --without-tcltk --without-gettext
-RUN make install prefix=/usr DESTDIR=/output NO_TCLTK=YesPlease NO_GETTEXT=YesPlease
+# NO_RUST disables the experimental libgitcore.a Rust build introduced in
+# git 2.55. It requires cargo which the hadron-toolchain image does not
+# ship. Rust is optional through the git 2.x series and mandatory from
+# git 3.0; drop NO_RUST once the toolchain provides cargo.
+RUN make install prefix=/usr DESTDIR=/output NO_TCLTK=YesPlease NO_GETTEXT=YesPlease NO_RUST=YesPlease
 
 # Strip dev artifacts from the install tree so the final layer only ships
 # runtime binaries, libexec helpers, shared libraries, and data files.
