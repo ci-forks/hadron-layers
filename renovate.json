@@ -15,5 +15,19 @@
       ],
       "automerge": true
     }
+  ],
+  "customManagers": [
+    {
+      "description": "Track HADRON_VERSION (the Hadron base image tag used by every layer's test stage) via GHCR. Bumping this triggers a full rebuild across all layers, which is exactly the smoke test we want on every new Hadron release.",
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/^docker-bake\\.hcl$/"
+      ],
+      "matchStrings": [
+        "variable \"HADRON_VERSION\"\\s*\\{\\s*default\\s*=\\s*\"(?<currentValue>[^\"]+)\""
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "ghcr.io/kairos-io/hadron"
+    }
   ]
 }

@@ -1,5 +1,6 @@
 # HADRON_TOOLCHAIN_VERSION is provided centrally via docker-bake.hcl.
 ARG HADRON_TOOLCHAIN_VERSION
+ARG HADRON_VERSION
 
 FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_TOOLCHAIN_VERSION} AS downloader
 RUN mkdir -p /output
@@ -145,7 +146,9 @@ COPY --from=merge /output/ /
 # here fails the build and gates the release step in CI. Runs an offline
 # sign/verify roundtrip with an ephemeral keypair to exercise libgcrypt,
 # libgpg-error, libassuan and libksba in one shot.
-FROM ghcr.io/kairos-io/hadron:main AS test
+# HADRON_VERSION is pinned centrally in docker-bake.hcl and bumped by
+# Renovate when a newer semver tag is published to GHCR.
+FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS test
 COPY --from=default / /
 RUN gpg --version
 RUN gpgv --version

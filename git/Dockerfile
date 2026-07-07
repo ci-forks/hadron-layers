@@ -2,6 +2,7 @@
 # HADRON_TOOLCHAIN_VERSION is provided centrally via docker-bake.hcl.
 
 ARG HADRON_TOOLCHAIN_VERSION
+ARG HADRON_VERSION
 
 FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_TOOLCHAIN_VERSION} AS builder
 
@@ -47,7 +48,9 @@ COPY --from=merge /output/ /
 # Smoke-test the built layer against a Hadron base image. Any RUN failure
 # here fails the build and gates the release step in CI. Kept fully offline
 # so the test is deterministic and does not depend on external network.
-FROM ghcr.io/kairos-io/hadron:main AS test
+# HADRON_VERSION is pinned centrally in docker-bake.hcl and bumped by
+# Renovate when a newer semver tag is published to GHCR.
+FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS test
 COPY --from=default / /
 RUN git --version
 RUN set -eux; \

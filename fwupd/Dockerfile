@@ -1,5 +1,6 @@
 # HADRON_TOOLCHAIN_VERSION is provided centrally via docker-bake.hcl.
 ARG HADRON_TOOLCHAIN_VERSION
+ARG HADRON_VERSION
 
 FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_TOOLCHAIN_VERSION} AS downloader
 # Install it at the top so we dont need to reinstall on each target
@@ -208,7 +209,9 @@ COPY --from=merge /output/usr/share/metainfo/ /usr/share/metainfo/
 # a long transitive stack (glib, libxmlb, libjcat, sqlite, libusb, libffi,
 # gettext) — a version check catches broken linkage, missing symbols and
 # runtime loader misconfiguration in the assembled layer.
-FROM ghcr.io/kairos-io/hadron:main AS test
+# HADRON_VERSION is pinned centrally in docker-bake.hcl and bumped by
+# Renovate when a newer semver tag is published to GHCR.
+FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS test
 COPY --from=default / /
 # fwupdtool is the standalone tool — links the same libfwupd /
 # libfwupdplugin stack as the daemon but does not need a running fwupd
