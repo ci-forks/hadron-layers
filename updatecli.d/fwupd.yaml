@@ -91,6 +91,14 @@ sources:
     transformers:
       - trimprefix: v
 
+  libucontext:
+    kind: githubrelease
+    spec:
+      owner: kaniini
+      repository: libucontext
+    transformers:
+      - trimprefix: libucontext-
+
 targets:
   fwupd_version:
     name: 'FWUPD_VERSION in fwupd/Dockerfile updated to {{ source "fwupd" }}'
@@ -181,3 +189,13 @@ targets:
         keyword: ARG
         matcher: LIBFFI_VERSION
     sourceid: libffi
+
+  libucontext_version:
+    name: 'LIBUCONTEXT_VERSION in fwupd/Dockerfile updated to {{ source "libucontext" }}'
+    kind: dockerfile
+    spec:
+      file: fwupd/Dockerfile
+      instruction:
+        keyword: ARG
+        matcher: LIBUCONTEXT_VERSION
+    sourceid: libucontext

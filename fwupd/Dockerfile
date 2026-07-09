@@ -46,6 +46,12 @@ RUN curl -L https://github.com/sqlite/sqlite/archive/refs/tags/version-${SQLITE3
 ARG LIBFFI_VERSION=3.7.0
 RUN curl -L https://github.com/libffi/libffi/releases/download/v${LIBFFI_VERSION}/libffi-${LIBFFI_VERSION}.tar.gz -o libffi.tar.gz
 
+# libucontext provides POSIX ucontext functions absent from musl libc.
+# libsystemd.so and libudev.so.1 in the hadron toolchain were compiled
+# against it, so it must be present at link time and at runtime.
+ARG LIBUCONTEXT_VERSION=1.5.1
+RUN curl -L https://github.com/kaniini/libucontext/archive/refs/tags/libucontext-${LIBUCONTEXT_VERSION}.tar.gz -o libucontext.tar.gz
+
 
 RUN tar -xf pcre2.tar.gz && mv pcre2-* pcre2
 RUN tar -xf glib.tar.xz && mv glib-* glib
@@ -57,6 +63,7 @@ RUN tar -xf gettext.tar.gz && mv gettext-* gettext
 RUN tar -xf fwupd.tar.xz && mv fwupd-* fwupd
 RUN tar -xf sqlite3.tar.gz && mv sqlite-version-* sqlite3
 RUN tar -xf libffi.tar.gz && mv libffi-* libffi
+RUN tar -xf libucontext.tar.gz && mv libucontext-libucontext-* libucontext
 
 
 FROM downloader AS pcre2
@@ -133,6 +140,18 @@ RUN ./configure ${COMMON_CONFIGURE_ARGS} --disable-docs --libdir=/usr/lib --disa
 RUN make -s -j${JOBS}
 RUN make -s -j${JOBS} install DESTDIR=/output
 
+FROM downloader AS libucontext
+ARG TARGETARCH
+WORKDIR /sources/libucontext
+# libucontext uses its own arch naming; map Docker's TARGETARCH to it
+RUN case "${TARGETARCH}" in \
+      amd64) ARCH=x86_64  ;; \
+      arm64) ARCH=aarch64 ;; \
+      *)     ARCH="${TARGETARCH}" ;; \
+    esac && \
+    make ARCH="${ARCH}" && \
+    make ARCH="${ARCH}" DESTDIR=/output prefix=/usr install
+
 FROM downloader AS libjcat
 COPY --from=glib2 /output /
 COPY --from=pcre2 /output /
@@ -150,6 +169,7 @@ COPY --from=json-glib /output/ /
 COPY --from=gettext /output/ /
 COPY --from=sqlite3 /output/ /
 COPY --from=libjcat /output/ /
+COPY --from=libucontext /output/ /
 WORKDIR /sources/fwupd
 # localstatedir is where it will store things like metadata. Options track
 # fwupd >= 2.1: cbor, libarchive, plugin_flashrom and protobuf were removed
@@ -176,6 +196,7 @@ COPY --from=gettext /output/ /output/
 COPY --from=sqlite3 /output/ /output/
 COPY --from=fwupd /output/ /output/
 COPY --from=libffi /output/ /output/
+COPY --from=libucontext /output/ /output/
 COPY --from=libjcat /output/ /output/
 RUN find /output -name "*.h"  -delete && \
     find /output -name "*.a"  -delete && \
