@@ -93,8 +93,8 @@ WORKDIR /build/drbd-utils
 RUN ./configure --prefix=/usr --localstatedir=/var --sysconfdir=/etc \
       --without-manual \
       --without-83support --without-84support \
-      --with-systemdsystemunitdir=/lib/systemd/system \
-      --with-tmpfilesdir=/lib/tmpfiles.d \
+      --with-systemdsystemunitdir=/usr/lib/systemd/system \
+      --with-tmpfilesdir=/usr/lib/tmpfiles.d \
       --without-heartbeat --without-pacemaker --without-rgmanager --without-bashcompletion && \
     make -s -j"$(nproc)" && \
     make -s -j"$(nproc)" install DESTDIR=/dest && \
@@ -114,9 +114,9 @@ RUN set -eux; kver=$(ls /lib/modules); \
     [ "$(ls /lib/modules | wc -l)" -eq 1 ] || \
       { echo "expected exactly one kernel under /lib/modules, got: ${kver}" >&2; exit 1; }; \
     depmod "${kver}"; \
-    mkdir -p "/out/lib/modules/${kver}"; \
-    cp -a "/lib/modules/${kver}/updates" "/out/lib/modules/${kver}/"; \
-    cp -a "/lib/modules/${kver}"/modules.* "/out/lib/modules/${kver}/"
+    mkdir -p "/out/usr/lib/modules/${kver}"; \
+    cp -a "/lib/modules/${kver}/updates" "/out/usr/lib/modules/${kver}/"; \
+    cp -a "/lib/modules/${kver}"/modules.* "/out/usr/lib/modules/${kver}/"
 
 # Final layer: the out-of-tree DRBD 9 module (in updates/), the depmod indexes
 # that reference it, and the drbd-utils userspace tools. Use as a layer on top
