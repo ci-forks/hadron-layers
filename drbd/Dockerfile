@@ -72,7 +72,9 @@ RUN kver=$(cat /usr/share/kernel-misc/kernel-release) && \
     # DRBD 8 module regardless of the tarball's default install directory.
     cd "/dest/lib/modules/${kver}" && mkdir -p updates && \
     find . -path ./updates -prune -o -name '*.ko' -print | \
-      while read -r ko; do mv "${ko}" updates/; done
+      while read -r ko; do mv "${ko}" updates/; done && \
+    [ -n "$(find updates -name '*.ko' -print -quit)" ] || \
+      { echo "no DRBD .ko modules were built" >&2; exit 1; }
 
 # ── Userspace tools ─────────────────────────────────────────────────────────
 # drbdadm / drbdsetup / drbdmeta for managing the DRBD 9 module. The LINBIT
@@ -104,7 +106,11 @@ RUN ./configure --prefix=/usr --localstatedir=/var --sysconfdir=/etc \
 # them again would only bloat the layer.
 FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS assemble
 COPY --from=module-builder /dest/lib/modules/ /lib/modules/
+# The base image ships exactly one kernel; derive its release from the single
+# directory name (the toolchain's /usr/share/kernel-misc is not present here).
 RUN set -eux; kver=$(ls /lib/modules); \
+    [ "$(ls /lib/modules | wc -l)" -eq 1 ] || \
+      { echo "expected exactly one kernel under /lib/modules, got: ${kver}" >&2; exit 1; }; \
     depmod "${kver}"; \
     mkdir -p "/out/lib/modules/${kver}"; \
     cp -a "/lib/modules/${kver}/updates" "/out/lib/modules/${kver}/"; \
@@ -131,6 +137,8 @@ COPY --from=utils-builder /dest/ /
 FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION} AS test
 COPY --from=default / /
 RUN set -eux; kver=$(ls /lib/modules); \
+    [ "$(ls /lib/modules | wc -l)" -eq 1 ] || \
+      { echo "expected exactly one kernel under /lib/modules, got: ${kver}" >&2; exit 1; }; \
     test -f "/lib/modules/${kver}/updates/drbd.ko"; \
     modinfo "/lib/modules/${kver}/updates/drbd.ko" | grep -qi '^version:'; \
     modprobe -n -v -S "${kver}" drbd 2>&1 | grep -q 'updates/drbd\.ko'; \
