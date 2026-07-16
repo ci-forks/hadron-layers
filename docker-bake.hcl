@@ -91,7 +91,6 @@ target "drbd" {
   target     = "default"
   args = {
     HADRON_TOOLCHAIN_VERSION = HADRON_TOOLCHAIN_VERSION
-    HADRON_VERSION           = HADRON_VERSION
   }
   labels    = common_labels("drbd", "Out-of-tree DRBD 9 kernel module and drbd-utils")
   platforms = ["linux/amd64", "linux/arm64"]
