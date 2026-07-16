@@ -20,6 +20,7 @@ Or to create a sysextension with [Auroraboot](https://github.com/kairos-io/auror
 | `git` | `ghcr.io/kairos-io/hadron-layers/git` | Git version control system |
 | `gpg` | `ghcr.io/kairos-io/hadron-layers/gpg` | GnuPG and its runtime libraries |
 | `fwupd` | `ghcr.io/kairos-io/hadron-layers/fwupd` | Firmware update daemon |
+| `drbd` | `ghcr.io/kairos-io/hadron-layers/drbd` | Out-of-tree DRBD 9 kernel module and drbd-utils |
 
 ## How it works
 
@@ -29,6 +30,14 @@ Each layer lives in its own subdirectory (e.g. `git/Dockerfile`) and follows thi
 2. **Merge stage** – collects all build outputs, then strips dev artifacts (headers `*.h`, static libs `*.a`, libtool archives `*.la`, pkg-config files `*.pc`, man pages, docs). Only runtime files remain.
 3. **Final `default` stage** – `FROM scratch`, copying the filtered output. This is the published image.
 4. **`test` stage** – `FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION}`, layered with `default`, runs offline smoke tests (`RUN`) that exercise the built binaries. CI builds this stage first (amd64 only); if any `RUN` fails, the release build is skipped.
+
+### Kernel-module layers
+
+The `drbd` layer is an **out-of-tree kernel module** and deviates from the pattern above:
+
+- The toolchain image ships the kernel `.config`, `Module.symvers` and release strings under `/usr/share/kernel-misc`, but not the kernel source. The build stage fetches the matching kernel source, runs `modules_prepare`, then compiles the module against it.
+- The module is installed into `/lib/modules/$(KERNELRELEASE)/updates/` so `depmod` resolves it ahead of any in-tree module of the same name. An assemble stage (`FROM ghcr.io/kairos-io/hadron`) re-runs `depmod` and the layer ships only the new `*.ko` and the regenerated `modules.*` indexes.
+- A kernel module is tied to the exact kernel of the base image, so such layers also give `HADRON_TOOLCHAIN_VERSION` and `HADRON_VERSION` **default values**. This lets users `docker build` the layer standalone against a newer Hadron release (usually a newer kernel) by overriding *both* to the same version; CI still supplies them centrally from `docker-bake.hcl`.
 
 ## Toolchain and base versions
 

@@ -165,18 +165,19 @@ jobs:
 
       # Extract the primary software version from the Dockerfile.
       # Convention: the first ARG with a default value (ARG NAME=value) that is
-      # not HADRON_TOOLCHAIN_VERSION is the image's version tag.
+      # not the Hadron base/toolchain version (HADRON_TOOLCHAIN_VERSION,
+      # HADRON_VERSION) is the image's version tag.
       - name: Extract software version
         id: version
         env:
           LAYER: ${{ matrix.layer }}
         run: |
           VERSION=$(grep -E '^ARG [A-Z][A-Z_0-9]*_VERSION=' "$LAYER/Dockerfile" \
-            | grep -v '^ARG HADRON_TOOLCHAIN_VERSION=' \
+            | grep -vE '^ARG (HADRON_TOOLCHAIN_VERSION|HADRON_VERSION)=' \
             | head -1 \
             | cut -d= -f2)
           if [[ -z "$VERSION" ]]; then
-            echo "Error: no _VERSION ARG with a default value found in $LAYER/Dockerfile (or only HADRON_TOOLCHAIN_VERSION was present)"
+            echo "Error: no _VERSION ARG with a default value found in $LAYER/Dockerfile (or only Hadron base/toolchain versions were present)"
             exit 1
           fi
           echo "value=$VERSION" >> "$GITHUB_OUTPUT"
