@@ -68,12 +68,14 @@ ENV CFLAGS="" LDFLAGS=""
 RUN kver=$(cat /usr/share/kernel-misc/kernel-release) && \
     ARCH="$(cat /karch)" make -j"$(nproc)" KDIR=/build/linux KVER="${kver}" && \
     ARCH="$(cat /karch)" make install DESTDIR=/dest KDIR=/build/linux KVER="${kver}" && \
-    # Guarantee every DRBD .ko lands in updates/ so it overrides the in-tree
-    # DRBD 8 module regardless of the tarball's default install directory.
+    # Guarantee every DRBD .ko/.ko.zst lands in updates/ so it overrides the
+    # in-tree DRBD 8 module regardless of the tarball's default install dir.
+    # The kernel may compress modules to .ko.zst (CONFIG_MODULE_COMPRESS_ZSTD);
+    # handle both plain and compressed module files.
     cd "/dest/lib/modules/${kver}" && mkdir -p updates && \
-    find . -path ./updates -prune -o -name '*.ko' -print | \
+    find . -path ./updates -prune -o \( -name '*.ko' -o -name '*.ko.zst' \) -print | \
       while read -r ko; do mv "${ko}" updates/; done && \
-    [ -n "$(find updates -name '*.ko' -print -quit)" ] || \
+    [ -n "$(find updates \( -name '*.ko' -o -name '*.ko.zst' \) -print -quit)" ] || \
       { echo "no DRBD .ko modules were built" >&2; exit 1; }
 
 # ── Userspace tools ─────────────────────────────────────────────────────────
@@ -139,8 +141,9 @@ COPY --from=default / /
 RUN set -eux; kver=$(ls /lib/modules); \
     [ "$(ls /lib/modules | wc -l)" -eq 1 ] || \
       { echo "expected exactly one kernel under /lib/modules, got: ${kver}" >&2; exit 1; }; \
-    test -f "/lib/modules/${kver}/updates/drbd.ko"; \
-    modinfo "/lib/modules/${kver}/updates/drbd.ko" | grep -qi '^version:'; \
+    drbd_ko=$(find "/lib/modules/${kver}/updates" \( -name 'drbd.ko' -o -name 'drbd.ko.zst' \) | head -1); \
+    test -n "${drbd_ko}"; \
+    modinfo "${drbd_ko}" | grep -qi '^version:'; \
     modprobe -n -v -S "${kver}" drbd 2>&1 | grep -q 'updates/drbd\.ko'; \
     drbdadm --version | grep -qi 'DRBDADM_VERSION='; \
     drbdsetup --version | grep -qi drbd; \
