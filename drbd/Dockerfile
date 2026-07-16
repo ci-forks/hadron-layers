@@ -8,14 +8,12 @@
 # so depmod resolves it ahead of the in-tree kernel/ copy.
 # (Hadron uses UsrMerge: /lib is a symlink to usr/lib.)
 #
-# HADRON_TOOLCHAIN_VERSION and HADRON_VERSION default to a known-good pair but
-# are build ARGs on purpose: a kernel module is tied to the exact kernel of the
-# base image. To build for a newer Hadron release (which usually ships a newer
-# kernel), override *both* to the same version so the module is compiled
-# against, and shipped for, the kernel it will run on. In this repository's CI
-# both values are supplied centrally from docker-bake.hcl.
+# HADRON_TOOLCHAIN_VERSION defaults to a known-good version but is a build ARG
+# on purpose: a kernel module is tied to the exact kernel of the toolchain
+# image it is built against. The consumer must run a Hadron release whose
+# kernel matches this toolchain. In this repository's CI the value is supplied
+# centrally from docker-bake.hcl.
 ARG HADRON_TOOLCHAIN_VERSION=v0.5.1
-ARG HADRON_VERSION=v0.5.1
 
 # ── Kernel module ───────────────────────────────────────────────────────────
 # The toolchain image ships the kernel .config, Module.symvers and the release

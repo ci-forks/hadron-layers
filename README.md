@@ -36,8 +36,9 @@ Each layer lives in its own subdirectory (e.g. `git/Dockerfile`) and follows thi
 The `drbd` layer is an **out-of-tree kernel module** and deviates from the pattern above:
 
 - The toolchain image ships the kernel `.config`, `Module.symvers` and release strings under `/usr/share/kernel-misc`, but not the kernel source. The build stage fetches the matching kernel source, runs `modules_prepare`, then compiles the module against it.
-- The module is installed into `/lib/modules/$(KERNELRELEASE)/updates/` so `depmod` resolves it ahead of any in-tree module of the same name. An assemble stage (`FROM ghcr.io/kairos-io/hadron`) re-runs `depmod` and the layer ships only the new `*.ko` and the regenerated `modules.*` indexes.
-- A kernel module is tied to the exact kernel of the base image, so such layers also give `HADRON_TOOLCHAIN_VERSION` and `HADRON_VERSION` **default values**. This lets users `docker build` the layer standalone against a newer Hadron release (usually a newer kernel) by overriding *both* to the same version; CI still supplies them centrally from `docker-bake.hcl`.
+- The module is installed into `/usr/lib/modules/$(KERNELRELEASE)/updates/` so `depmod` resolves it ahead of any in-tree module of the same name. The layer ships only the `*.ko`/`*.ko.zst` files under `updates/`; the consumer image is expected to run `depmod` at build/boot to regenerate the `modules.*` indexes.
+- The smoke test runs against `hadron-toolchain` (already pulled during the build; ships `kmod` for `modinfo`) rather than the `hadron` base image, and is purely static: it verifies the module is present under `updates/` and the userspace tools are installed.
+- A kernel module is tied to the exact kernel of the toolchain image, so such layers give `HADRON_TOOLCHAIN_VERSION` a **default value**. This lets users `docker build` the layer standalone against a newer toolchain (usually a newer kernel) by overriding it; CI still supplies it centrally from `docker-bake.hcl`. The consumer must run a Hadron release whose kernel matches this toolchain.
 
 ## Toolchain and base versions
 
