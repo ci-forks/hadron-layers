@@ -1,0 +1,52 @@
+---
+name: drbd layer version updates
+
+sources:
+  drbd:
+    # Out-of-tree DRBD 9 kernel module (LINBIT). Track the latest 9.x GA only,
+    # excluding pre-releases (e.g. drbd-10.0.0a1) and the 10.x series.
+    kind: gittag
+    spec:
+      url: https://github.com/LINBIT/drbd.git
+      lsremote: true
+      versionfilter:
+        kind: regex/semver
+        regex: '^drbd-9\.[0-9]+\.[0-9]+$'
+        pattern: "*"
+    transformers:
+      - trimprefix: drbd-
+
+  drbd-utils:
+    # DRBD userspace tools (LINBIT). Track the latest 9.x GA only, excluding
+    # release candidates (e.g. v9.34.0-rc.1).
+    kind: gittag
+    spec:
+      url: https://github.com/LINBIT/drbd-utils.git
+      lsremote: true
+      versionfilter:
+        kind: regex/semver
+        regex: '^v9\.[0-9]+\.[0-9]+$'
+        pattern: "*"
+    transformers:
+      - trimprefix: v
+
+targets:
+  drbd_version:
+    name: 'DRBD_VERSION in drbd/Dockerfile updated to {{ source "drbd" }}'
+    kind: dockerfile
+    spec:
+      file: drbd/Dockerfile
+      instruction:
+        keyword: ARG
+        matcher: DRBD_VERSION
+    sourceid: drbd
+
+  drbd_utils_version:
+    name: 'DRBD_UTILS_VERSION in drbd/Dockerfile updated to {{ source "drbd-utils" }}'
+    kind: dockerfile
+    spec:
+      file: drbd/Dockerfile
+      instruction:
+        keyword: ARG
+        matcher: DRBD_UTILS_VERSION
+    sourceid: drbd-utils

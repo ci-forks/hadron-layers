@@ -20,6 +20,7 @@ Or to create a sysextension with [Auroraboot](https://github.com/kairos-io/auror
 | `git` | `ghcr.io/kairos-io/hadron-layers/git` | Git version control system |
 | `gpg` | `ghcr.io/kairos-io/hadron-layers/gpg` | GnuPG and its runtime libraries |
 | `fwupd` | `ghcr.io/kairos-io/hadron-layers/fwupd` | Firmware update daemon |
+| `drbd` | `ghcr.io/kairos-io/hadron-layers/drbd` | Out-of-tree DRBD 9 kernel module and drbd-utils |
 
 ## How it works
 
@@ -29,6 +30,15 @@ Each layer lives in its own subdirectory (e.g. `git/Dockerfile`) and follows thi
 2. **Merge stage** – collects all build outputs, then strips dev artifacts (headers `*.h`, static libs `*.a`, libtool archives `*.la`, pkg-config files `*.pc`, man pages, docs). Only runtime files remain.
 3. **Final `default` stage** – `FROM scratch`, copying the filtered output. This is the published image.
 4. **`test` stage** – `FROM ghcr.io/kairos-io/hadron:${HADRON_VERSION}`, layered with `default`, runs offline smoke tests (`RUN`) that exercise the built binaries. CI builds this stage first (amd64 only); if any `RUN` fails, the release build is skipped.
+
+### Kernel-module layers
+
+The `drbd` layer is an **out-of-tree kernel module** and deviates from the pattern above:
+
+- The toolchain image ships the kernel `.config`, `Module.symvers` and release strings under `/usr/share/kernel-misc`, but not the kernel source. The build stage fetches the matching kernel source, runs `modules_prepare`, then compiles the module against it.
+- The module is installed into `/usr/lib/modules/$(KERNELRELEASE)/updates/` so `depmod` resolves it ahead of any in-tree module of the same name. The layer ships only the `*.ko`/`*.ko.zst` files under `updates/`; the consumer image is expected to run `depmod` at build/boot to regenerate the `modules.*` indexes.
+- The smoke test runs against `hadron-toolchain` (already pulled during the build; ships `kmod` for `modinfo`) rather than the `hadron` base image, and is purely static: it verifies the module is present under `updates/` and the userspace tools are installed.
+- A kernel module is tied to the exact kernel of the toolchain image, so such layers give `HADRON_TOOLCHAIN_VERSION` a **default value**. This lets users `docker build` the layer standalone against a newer toolchain (usually a newer kernel) by overriding it; CI still supplies it centrally from `docker-bake.hcl`. The consumer must run a Hadron release whose kernel matches this toolchain.
 
 ## Toolchain and base versions
 
