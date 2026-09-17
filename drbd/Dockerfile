@@ -22,7 +22,7 @@ ARG HADRON_TOOLCHAIN_VERSION=v0.5.2
 # module can be compiled against it (the same approach Hadron uses for its own
 # out-of-tree module examples).
 FROM ghcr.io/kairos-io/hadron-toolchain:${HADRON_TOOLCHAIN_VERSION} AS module-builder
-ARG DRBD_VERSION=9.3.3
+ARG DRBD_VERSION=9.3.4
 ARG TARGETARCH
 WORKDIR /build
 
