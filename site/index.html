@@ -155,6 +155,73 @@
     word-break: break-all;
   }
   .none { color: var(--muted); font-style: italic; padding: 8px 0; }
+  .usage {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 18px;
+  }
+  .usage > summary {
+    cursor: pointer;
+    padding: 12px 18px;
+    font-weight: 600;
+    font-size: .95rem;
+    list-style: none;
+  }
+  .usage > summary::-webkit-details-marker { display: none; }
+  .usage > summary::before {
+    content: "▸";
+    color: var(--muted);
+    display: inline-block;
+    width: 1em;
+  }
+  .usage[open] > summary::before { content: "▾"; }
+  .usage-body { padding: 0 18px 16px; }
+  .usage-body h3 {
+    margin: 14px 0 6px;
+    font-size: .88rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+  }
+  .usage-body p { margin: 0 0 10px; font-size: .9rem; color: var(--muted); }
+  .usage-body p code { white-space: nowrap; }
+  .usage-body a { color: var(--accent); text-decoration: none; }
+  .snippet {
+    position: relative;
+    background: #0b0f14;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 0 0 10px;
+  }
+  .snippet pre {
+    margin: 0;
+    padding: 10px 12px;
+    overflow-x: auto;
+    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+    font-size: .82rem;
+    color: var(--code);
+    line-height: 1.55;
+  }
+  .snippet .btn { position: absolute; top: 6px; right: 6px; }
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--highlight);
+    border-radius: 0 6px 6px 0;
+    padding: 8px 12px;
+    font-size: .85rem;
+    margin: 0 0 10px;
+  }
+  .note code { white-space: nowrap; }
+  .badge.sysext { color: var(--accent-2); border-color: var(--accent-2); }
+  .sysext-cmd { margin-top: -4px; }
+  .sysext-cmd .label {
+    font-size: .7rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+    flex: none;
+  }
   button.btn, a.btn {
     cursor: pointer;
     border: 1px solid var(--border);
@@ -217,6 +284,50 @@
   <p id="subtitle">Pre-built OCI layers for <a href="https://github.com/kairos-io/hadron">Hadron</a>. Each layer publishes a minimal image containing runtime binaries and shared libraries.</p>
 </header>
 <main>
+  <details class="usage" id="usage">
+    <summary>How to consume these layers and system extensions</summary>
+    <div class="usage-body">
+      <h3>As a layer in a Hadron image</h3>
+      <p>Copy the layer into your own image. The layer is <code>FROM scratch</code> and holds only
+        runtime binaries and shared libraries, so the whole filesystem goes in at the root.</p>
+      <div class="snippet"><pre data-copy>FROM ghcr.io/kairos-io/hadron:VERSION
+COPY --from=ghcr.io/kairos-io/hadron-layers/git:latest / /</pre></div>
+      <p>Use the digest-pinned reference from a layer card below instead of a tag when you want a
+        reproducible build.</p>
+
+      <h3>As a system extension on a running Kairos node</h3>
+      <p>Every compatible layer also publishes a <code>.sysext.raw</code> system extension. This
+        page's <a href="releases.json">releases.json</a> is the catalog Kairos searches by default,
+        so a bare name is enough:</p>
+      <div class="snippet"><pre data-copy>kairos-agent sysext install fwupd
+kairos-agent sysext enable --active --now fwupd
+kairos-agent sysext list</pre></div>
+      <p>Pass <code>--version</code> for an exact version or a semver constraint, or install a
+        digest-pinned artifact directly with the <code>oci://</code> reference each card shows:</p>
+      <div class="snippet"><pre data-copy>kairos-agent sysext install --version "&gt;= 2.1, &lt; 3" fwupd</pre></div>
+
+      <h3>At install time, from a cloud config</h3>
+      <p><code>install.extensions</code> takes the same names, versions and references, and
+        installs them onto the node the installer writes.</p>
+      <div class="snippet"><pre data-copy>#cloud-config
+install:
+  extensions:
+    - fwupd
+    - gpg@2.4.9
+extensions:
+  ignore_signatures: true</pre></div>
+      <div class="note">
+        These artifacts are <strong>unsigned</strong>: they are built for any deployment, and
+        Trusted Boot signatures belong to yours. A default Kairos node refuses to merge an
+        extension systemd cannot verify, so it is downloaded, enabled and then silently not
+        active. Set <code>extensions.ignore_signatures: true</code> to accept them, or re-sign the
+        raw image with your own keys, which is the only option under Trusted Boot.
+      </div>
+      <p>To resolve names against your own index instead, list it under
+        <code>extensions.catalogs</code> (or pass <code>--catalog</code>); the catalogs are
+        searched in order and the first one publishing the name wins.</p>
+    </div>
+  </details>
   <div class="controls">
     <input type="search" id="filter" placeholder="Filter layers…" aria-label="Filter layers" />
   </div>
@@ -360,6 +471,17 @@
     tagCountBadge.className = "badge";
     tagCountBadge.textContent = layer.tags.length + " tag" + (layer.tags.length === 1 ? "" : "s");
     badges.appendChild(tagCountBadge);
+    var sysextTags = layer.tags.filter(function (t) {
+      return t.sysext && Object.keys(t.sysext).length;
+    });
+    if (sysextTags.length) {
+      var sysextBadge = document.createElement("span");
+      sysextBadge.className = "badge sysext";
+      sysextBadge.textContent = "sysext";
+      sysextBadge.title = sysextTags.length + " tag" + (sysextTags.length === 1 ? "" : "s") +
+        " publish a system extension";
+      badges.appendChild(sysextBadge);
+    }
     head.appendChild(badges);
     card.appendChild(head);
 
@@ -411,6 +533,63 @@
     if (!layer.tags.length) pullCopyBtn.disabled = true;
     pullBar.appendChild(pullCopyBtn);
     body.appendChild(pullBar);
+
+    // System-extension bar: the sysext artifact published alongside the
+    // selected tag, per architecture. Hidden for a tag that has none, which is
+    // what an empty `sysext` object in releases.json means.
+    var sysextBar = document.createElement("div");
+    sysextBar.className = "pull-cmd sysext-cmd";
+    var sysextLabel = document.createElement("span");
+    sysextLabel.className = "label";
+    sysextLabel.textContent = "sysext";
+    var archSelect = document.createElement("select");
+    archSelect.className = "version-select";
+    archSelect.style.minWidth = "90px";
+    archSelect.setAttribute("aria-label", "Select architecture");
+    var sysextCode = document.createElement("code");
+
+    function sysextFor(tag) {
+      var found = layer.tags.filter(function (t) { return t.tag === tag; })[0];
+      return (found && found.sysext) || {};
+    }
+    function sysextRef() {
+      var entry = sysextFor(versionSelect.value)[archSelect.value];
+      return entry ? entry.oci : "";
+    }
+    function sysextCommand() {
+      var ref = sysextRef();
+      return ref ? "kairos-agent sysext install oci://" + ref : "";
+    }
+    // Remembered separately from archSelect.value, which a tag publishing no
+    // sysext at all empties: the choice has to survive passing through one.
+    var chosenArch = "";
+    function refreshSysext() {
+      var byArch = sysextFor(versionSelect.value);
+      var arches = Object.keys(byArch).sort();
+      archSelect.innerHTML = "";
+      arches.forEach(function (a) {
+        var opt = document.createElement("option");
+        opt.value = a;
+        opt.textContent = a;
+        archSelect.appendChild(opt);
+      });
+      if (arches.indexOf(chosenArch) !== -1) archSelect.value = chosenArch;
+      sysextBar.style.display = arches.length ? "" : "none";
+      sysextCode.textContent = sysextCommand();
+    }
+    var sysextCopyBtn = copyButton("Copy", sysextCommand, null, copyIcon);
+    archSelect.addEventListener("change", function () {
+      chosenArch = archSelect.value;
+      sysextCode.textContent = sysextCommand();
+    });
+    versionSelect.addEventListener("change", refreshSysext);
+
+    sysextBar.appendChild(sysextLabel);
+    sysextBar.appendChild(archSelect);
+    sysextBar.appendChild(sysextCode);
+    sysextBar.appendChild(sysextCopyBtn);
+    refreshSysext();
+    body.appendChild(sysextBar);
 
     var actions = document.createElement("div");
     actions.className = "card-actions";
@@ -592,6 +771,17 @@
     if (data.generated) footer.textContent = "Data generated " + data.generated;
     render();
   }
+
+  // The usage snippets are static markup, so they are wired up independently of
+  // releases.json: they stay useful even when the index fails to load.
+  function wireSnippetCopy() {
+    var snippets = document.querySelectorAll(".snippet pre[data-copy]");
+    Array.prototype.forEach.call(snippets, function (pre) {
+      pre.parentNode.appendChild(copyButton("Copy", function () { return pre.textContent; }, null, copyIcon));
+    });
+  }
+
+  wireSnippetCopy();
 
   fetch("releases.json", { cache: "no-store" })
     .then(function (r) {

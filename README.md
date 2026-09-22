@@ -41,6 +41,27 @@ architectures appear as `tags[].sysext.amd64.oci` and
 `tags[].sysext.arm64.oci`; each value is a digest-pinned OCI reference. The
 object is empty when no sysext is available for that version.
 
+### On a Kairos node
+
+`releases.json` is the extension catalog Kairos searches by default, so a bare
+layer name resolves against this repository with no configuration:
+
+```bash
+kairos-agent sysext install fwupd
+kairos-agent sysext enable --active --now fwupd
+```
+
+`--version` takes an exact version or a semver constraint, and an
+`oci://` reference installs a pinned artifact directly. The same names,
+versions and references go under `install.extensions` in a cloud config to
+install an extension at install time, and `extensions.catalogs` replaces the
+default index with your own.
+
+Because these artifacts are unsigned, a default Kairos node downloads and
+enables them but does not merge them: systemd refuses an extension it cannot
+verify. Set `extensions.ignore_signatures: true` to accept them, or re-sign
+the raw image with your own keys, which is the only option under Trusted Boot.
+
 > **Found a bug, or want to request a feature?** Open it on
 > [kairos-io/kairos](https://github.com/kairos-io/kairos/issues), including
 > issues about this repository. Every Kairos issue lives in one place, so you
