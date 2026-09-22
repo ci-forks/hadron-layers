@@ -103,9 +103,7 @@ The `tailscale` layer is written in Go and deviates from the pattern above:
   optional override, it is enabled statically through
   `/usr/lib/systemd/system/multi-user.target.wants/`, and a `tmpfiles.d`
   drop-in seeds `/etc/default/tailscaled` from `/usr/share/factory` on first
-  boot. `tailscaled` shells out to `iptables` (nft backend) for its netfilter
-  rules, which the Hadron base image provides; the kernel needs `CONFIG_TUN`,
-  which Hadron builds as a module.
+  boot.
 
 ### Kernel-module layers
 
