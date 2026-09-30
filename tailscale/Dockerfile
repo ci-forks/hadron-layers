@@ -18,7 +18,7 @@ FROM golang:1.27.1-alpine AS builder
 # Tailscale releases stable versions on even minor numbers (1.100.x, 1.102.x);
 # odd minors are development tags such as v1.103.0-pre. updatecli only offers
 # even minors.
-ARG TAILSCALE_VERSION=1.102.3
+ARG TAILSCALE_VERSION=1.102.5
 ARG TARGETARCH
 
 WORKDIR /build
